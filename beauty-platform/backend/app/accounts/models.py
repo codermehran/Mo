@@ -36,6 +36,10 @@ class User(AbstractUser):
 
 
 class OTPRequest(models.Model):
+    class Purpose(models.TextChoices):
+        LOGIN = "LOGIN", "Login"
+        RECOVERY = "RECOVERY", "Recovery"
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -44,7 +48,11 @@ class OTPRequest(models.Model):
         blank=True,
     )
     phone_number = models.CharField(max_length=32, db_index=True)
-    code = models.CharField(max_length=8)
+    purpose = models.CharField(max_length=16, choices=Purpose.choices, db_index=True)
+    code_hash = models.CharField(max_length=128)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    sent_count = models.PositiveIntegerField(default=1)
+    attempt_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_verified = models.BooleanField(default=False)
@@ -52,6 +60,7 @@ class OTPRequest(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["phone_number", "created_at"]),
+            models.Index(fields=["phone_number", "purpose", "created_at"]),
             models.Index(fields=["user", "is_verified"]),
         ]
         ordering = ["-created_at"]
