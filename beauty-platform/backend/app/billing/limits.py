@@ -5,6 +5,7 @@ from typing import Iterable, Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -43,27 +44,30 @@ def _count_staff(clinic) -> int:
 
 
 def check_plan_limits(clinic, action: PlanAction | str) -> None:
-    try:
-        subscription = clinic.subscription
-    except Subscription.DoesNotExist:
-        subscription = None
+    with transaction.atomic():
+        clinic = type(clinic).objects.select_for_update().get(pk=clinic.pk)
 
-    if _is_paid_plan(subscription):
-        return
+        try:
+            subscription = clinic.subscription
+        except Subscription.DoesNotExist:
+            subscription = None
 
-    action_value = action.value if isinstance(action, Enum) else str(action)
+        if _is_paid_plan(subscription):
+            return
 
-    if action_value == PlanAction.CREATE_STAFF.value:
-        current_total = _count_staff(clinic)
-        plan_limit = getattr(settings, "FREE_MAX_STAFF", 0)
-    elif action_value == PlanAction.CREATE_PATIENT.value:
-        current_total = Patient.objects.filter(clinic=clinic).count()
-        plan_limit = getattr(settings, "FREE_MAX_PATIENTS", 0)
-    elif action_value == PlanAction.CREATE_APPOINTMENT.value:
-        current_total = Appointment.objects.filter(clinic=clinic).count()
-        plan_limit = getattr(settings, "FREE_MAX_APPOINTMENTS", 0)
-    else:
-        return
+        action_value = action.value if isinstance(action, Enum) else str(action)
 
-    if plan_limit and current_total >= plan_limit:
-        raise PlanLimitExceeded()
+        if action_value == PlanAction.CREATE_STAFF.value:
+            current_total = _count_staff(clinic)
+            plan_limit = getattr(settings, "FREE_MAX_STAFF", 0)
+        elif action_value == PlanAction.CREATE_PATIENT.value:
+            current_total = Patient.objects.filter(clinic=clinic).count()
+            plan_limit = getattr(settings, "FREE_MAX_PATIENTS", 0)
+        elif action_value == PlanAction.CREATE_APPOINTMENT.value:
+            current_total = Appointment.objects.filter(clinic=clinic).count()
+            plan_limit = getattr(settings, "FREE_MAX_APPOINTMENTS", 0)
+        else:
+            return
+
+        if plan_limit and current_total >= plan_limit:
+            raise PlanLimitExceeded()

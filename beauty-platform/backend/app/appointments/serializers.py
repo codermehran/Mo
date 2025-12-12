@@ -39,6 +39,10 @@ class AppointmentSerializer(serializers.ModelSerializer):
         clinic_id = self.context.get("request").user.clinic_id
         if value.clinic_id != clinic_id:
             raise serializers.ValidationError("Provider must belong to the clinic.")
+        if value.role not in (User.Role.PRACTITIONER, User.Role.STAFF):
+            raise serializers.ValidationError(
+                "Provider must have role PRACTITIONER or STAFF."
+            )
         return value
 
     def validate_service(self, value: Service) -> Service:

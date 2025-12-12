@@ -71,10 +71,13 @@ class StaffViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        if not self.request.user.clinic:
+        clinic_id = self.request.user.clinic_id
+        if not clinic_id:
             raise NotFound("setup_required")
-        check_plan_limits(self.request.user.clinic, PlanAction.CREATE_STAFF)
-        serializer.save(clinic=self.request.user.clinic)
+        with transaction.atomic():
+            clinic = Clinic.objects.select_for_update().get(pk=clinic_id)
+            check_plan_limits(clinic, PlanAction.CREATE_STAFF)
+            serializer.save(clinic=clinic)
 
     def perform_update(self, serializer):
         if not self.request.user.clinic:
