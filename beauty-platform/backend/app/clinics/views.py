@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import permissions, status, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -46,6 +46,8 @@ class MyClinicView(APIView):
         clinic = request.user.clinic
         if not clinic:
             return Response({"detail": "setup_required"}, status=status.HTTP_404_NOT_FOUND)
+        if clinic.owner_id != request.user.id:
+            raise PermissionDenied("You do not have permission to update this clinic.")
         serializer = ClinicSerializer(clinic, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
