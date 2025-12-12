@@ -38,4 +38,4 @@ class StaffSerializer(serializers.ModelSerializer):
             "role",
             "clinic",
         ]
-        read_only_fields = ["id", "clinic"]
+        read_only_fields = ["id", "clinic", "role"]

@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import permissions, status, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,10 +25,11 @@ class ClinicView(APIView):
         serializer = ClinicSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        clinic = serializer.save(owner=request.user)
-        request.user.clinic = clinic
-        request.user.role = User.Role.CLINIC_OWNER
-        request.user.save(update_fields=["clinic", "role"])
+        with transaction.atomic():
+            clinic = serializer.save(owner=request.user)
+            request.user.clinic = clinic
+            request.user.role = User.Role.CLINIC_OWNER
+            request.user.save(update_fields=["clinic", "role"])
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -45,7 +47,9 @@ class MyClinicView(APIView):
     def put(self, request):
         clinic = request.user.clinic
         if not clinic:
-            return Response({"detail": "setup_required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "setup_required"}, status=status.HTTP_404_NOT_FOUND)
+        if clinic.owner_id != request.user.id:
+            raise PermissionDenied("You do not have permission to update this clinic.")
         serializer = ClinicSerializer(clinic, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -59,15 +63,18 @@ class StaffViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         clinic = self.request.user.clinic
         if not clinic:
-            raise NotFound({"detail": "setup_required"})
-        return User.objects.filter(clinic=clinic)
+            raise NotFound("setup_required")
+        return User.objects.filter(
+            clinic=clinic,
+            role__in=[User.Role.PRACTITIONER, User.Role.STAFF],
+        )
 
     def perform_create(self, serializer):
         if not self.request.user.clinic:
-            raise NotFound({"detail": "setup_required"})
+            raise NotFound("setup_required")
         serializer.save(clinic=self.request.user.clinic)
 
     def perform_update(self, serializer):
         if not self.request.user.clinic:
-            raise NotFound({"detail": "setup_required"})
+            raise NotFound("setup_required")
         serializer.save(clinic=self.request.user.clinic)
