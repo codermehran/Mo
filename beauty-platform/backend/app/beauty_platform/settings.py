@@ -157,3 +157,17 @@ SIMPLE_JWT = {
 KAVENEGAR_API_KEY = os.getenv("KAVENEGAR_API_KEY")
 KAVENEGAR_LOGIN_TEMPLATE = os.getenv("KAVENEGAR_LOGIN_TEMPLATE")
 KAVENEGAR_RECOVERY_TEMPLATE = os.getenv("KAVENEGAR_RECOVERY_TEMPLATE")
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+FREE_MAX_STAFF = _int_env("FREE_MAX_STAFF", 5)
+FREE_MAX_PATIENTS = _int_env("FREE_MAX_PATIENTS", 500)
+FREE_MAX_APPOINTMENTS = _int_env("FREE_MAX_APPOINTMENTS", 1000)
