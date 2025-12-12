@@ -21,8 +21,7 @@ class PatientSerializer(serializers.ModelSerializer):
             "gender",
             "notes",
         ]
-        read_only_fields = ["id", "clinic", "user"]
-
+        read_only_fields = ["id", "clinic"]
     def validate_user(self, value: User | None) -> User | None:
         if value and value.clinic_id != self.context.get("request").user.clinic_id:
             raise serializers.ValidationError("User must belong to the clinic.")
