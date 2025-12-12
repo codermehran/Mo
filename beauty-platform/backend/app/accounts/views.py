@@ -194,13 +194,18 @@ class VerifyOTPView(APIView):
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
 
-        return Response(
-            {
-                "access": str(access_token),
-                "refresh": str(refresh),
-                "attempts": otp.attempt_count,
-            }
-        )
+        response_data = {
+            "access": str(access_token),
+            "refresh": str(refresh),
+            "attempts": otp.attempt_count,
+            "user_id": user.id,
+            "role": user.role,
+            "requires_setup": user.clinic_id is None,
+        }
+        if user.clinic_id:
+            response_data["clinic_id"] = user.clinic_id
+
+        return Response(response_data)
 
 
 class LogoutView(APIView):
