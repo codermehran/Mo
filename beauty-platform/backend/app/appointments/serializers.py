@@ -45,7 +45,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_service(self, value: Service) -> Service:
+    def validate_service(self, value: Service | None) -> Service | None:
+        if value is None:
+            return value
         clinic_id = self.context.get("request").user.clinic_id
         if value.clinic_id != clinic_id:
             raise serializers.ValidationError("Service must belong to the clinic.")
