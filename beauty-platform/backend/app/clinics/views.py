@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsClinicOwner
+from billing.limits import PlanAction, check_plan_limits
 
 from .models import Clinic
 from .serializers import ClinicSerializer, StaffSerializer
@@ -72,6 +73,7 @@ class StaffViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         if not self.request.user.clinic:
             raise NotFound("setup_required")
+        check_plan_limits(self.request.user.clinic, PlanAction.CREATE_STAFF)
         serializer.save(clinic=self.request.user.clinic)
 
     def perform_update(self, serializer):
