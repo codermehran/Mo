@@ -26,20 +26,6 @@ class ClinicSerializer(serializers.ModelSerializer):
 
 
 class StaffSerializer(serializers.ModelSerializer):
-    def validate_role(self, value):
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-
-        if not user or not user.is_authenticated:
-            return value
-
-        if user.role != User.Role.CLINIC_OWNER:
-            raise serializers.ValidationError(
-                "You do not have permission to change staff roles."
-            )
-
-        return value
-
     class Meta:
         model = User
         fields = [
@@ -52,4 +38,4 @@ class StaffSerializer(serializers.ModelSerializer):
             "role",
             "clinic",
         ]
-        read_only_fields = ["id", "clinic"]
+        read_only_fields = ["id", "clinic", "role"]

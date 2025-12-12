@@ -64,7 +64,10 @@ class StaffViewSet(viewsets.ModelViewSet):
         clinic = self.request.user.clinic
         if not clinic:
             raise NotFound("setup_required")
-        return User.objects.filter(clinic=clinic)
+        return User.objects.filter(
+            clinic=clinic,
+            role__in=[User.Role.PRACTITIONER, User.Role.STAFF],
+        )
 
     def perform_create(self, serializer):
         if not self.request.user.clinic:
