@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from appointments.models import Appointment
 from patients.models import Patient
+from services.models import Service
 
 User = get_user_model()
 
@@ -38,4 +39,10 @@ class AppointmentSerializer(serializers.ModelSerializer):
         clinic_id = self.context.get("request").user.clinic_id
         if value.clinic_id != clinic_id:
             raise serializers.ValidationError("Provider must belong to the clinic.")
+        return value
+
+    def validate_service(self, value: Service) -> Service:
+        clinic_id = self.context.get("request").user.clinic_id
+        if value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Service must belong to the clinic.")
         return value
