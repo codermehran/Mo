@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
@@ -24,10 +25,11 @@ class ClinicView(APIView):
         serializer = ClinicSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        clinic = serializer.save(owner=request.user)
-        request.user.clinic = clinic
-        request.user.role = User.Role.CLINIC_OWNER
-        request.user.save(update_fields=["clinic", "role"])
+        with transaction.atomic():
+            clinic = serializer.save(owner=request.user)
+            request.user.clinic = clinic
+            request.user.role = User.Role.CLINIC_OWNER
+            request.user.save(update_fields=["clinic", "role"])
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -61,15 +63,15 @@ class StaffViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         clinic = self.request.user.clinic
         if not clinic:
-            raise NotFound({"detail": "setup_required"})
+            raise NotFound("setup_required")
         return User.objects.filter(clinic=clinic)
 
     def perform_create(self, serializer):
         if not self.request.user.clinic:
-            raise NotFound({"detail": "setup_required"})
+            raise NotFound("setup_required")
         serializer.save(clinic=self.request.user.clinic)
 
     def perform_update(self, serializer):
         if not self.request.user.clinic:
-            raise NotFound({"detail": "setup_required"})
+            raise NotFound("setup_required")
         serializer.save(clinic=self.request.user.clinic)
