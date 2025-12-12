@@ -31,9 +31,10 @@ class PlanLimitExceeded(APIException):
 def _is_paid_plan(subscription: Optional[Subscription]) -> bool:
     if not subscription:
         return False
+    if subscription.status not in {Subscription.Status.ACTIVE, Subscription.Status.TRIAL}:
+        return False
     plan = subscription.plan
     return plan and plan.tier != Plan.Tier.BASIC and plan.monthly_price > 0
-
 
 def _count_staff(clinic) -> int:
     staff_roles: Iterable[str] = [User.Role.PRACTITIONER, User.Role.STAFF]
