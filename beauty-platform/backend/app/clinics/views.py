@@ -40,7 +40,7 @@ class MyClinicView(APIView):
     def get(self, request):
         clinic = request.user.clinic
         if not clinic:
-            return Response({"detail": "setup_required"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "setup_required"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = ClinicSerializer(clinic)
         return Response(serializer.data)
 
