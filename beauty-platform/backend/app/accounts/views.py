@@ -88,11 +88,17 @@ class RequestOTPView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        user = User.objects.filter(phone_number=phone_number).first()
-        if not user:
+        try:
+            user = User.objects.get(phone_number=phone_number)
+        except User.DoesNotExist:
             return Response(
                 {"detail": "No user is registered with this phone number."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        except User.MultipleObjectsReturned:
+            return Response(
+                {"detail": "Multiple users share this phone number. Please contact support."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         code = f"{secrets.randbelow(1_000_000):06d}"
@@ -167,12 +173,23 @@ class VerifyOTPView(APIView):
         otp.is_verified = True
         otp.save(update_fields=["is_verified"])
 
-        user = otp.user or User.objects.filter(phone_number=phone_number).first()
+        user = otp.user
         if not user:
-            return Response(
-                {"detail": "No user is registered with this phone number."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            try:
+                user = User.objects.get(phone_number=phone_number)
+            except User.MultipleObjectsReturned:
+                return Response(
+                    {
+                        "detail": "Multiple users share this phone number. Please contact support.",
+                        "attempts": otp.attempt_count,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {"detail": "No user is registered with this phone number."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
