@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class Plan(models.Model):
@@ -94,3 +95,50 @@ class Payment(models.Model):
 
     def __str__(self) -> str:
         return f"Payment {self.amount} {self.currency} ({self.status})"
+
+
+class BillingPayment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SUCCESS = "SUCCESS", "Success"
+        FAILED = "FAILED", "Failed"
+
+    clinic = models.ForeignKey(
+        "clinics.Clinic",
+        on_delete=models.CASCADE,
+        related_name="billing_payments",
+    )
+    plan = models.ForeignKey(
+        Plan, on_delete=models.PROTECT, related_name="billing_payments"
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default="USD")
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    invoice_id = models.CharField(max_length=128, blank=True)
+    reference_id = models.CharField(max_length=128, unique=True)
+    checkout_url = models.URLField(blank=True)
+    transaction_id = models.CharField(max_length=128, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["clinic", "status"]),
+            models.Index(fields=["reference_id"], name="billing_pay_ref_id_idx"),
+        ]
+        ordering = ["-created_at"]
+
+    def mark_success(self, transaction_id: str | None = None) -> None:
+        self.status = self.Status.SUCCESS
+        if transaction_id:
+            self.transaction_id = transaction_id
+        self.paid_at = timezone.now()
+        self.save(update_fields=["status", "transaction_id", "paid_at", "updated_at"])

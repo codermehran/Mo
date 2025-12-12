@@ -171,3 +171,7 @@ def _int_env(name: str, default: int) -> int:
 FREE_MAX_STAFF = _int_env("FREE_MAX_STAFF", 5)
 FREE_MAX_PATIENTS = _int_env("FREE_MAX_PATIENTS", 500)
 FREE_MAX_APPOINTMENTS = _int_env("FREE_MAX_APPOINTMENTS", 1000)
+
+BITPAY_WEBHOOK_TOKEN = os.getenv("BITPAY_WEBHOOK_TOKEN")
+BITPAY_WEBHOOK_SECRET = os.getenv("BITPAY_WEBHOOK_SECRET")
+BITPAY_CHECKOUT_URL = os.getenv("BITPAY_CHECKOUT_URL", "https://checkout.bitpay.com/invoice")
