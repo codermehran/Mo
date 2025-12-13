@@ -64,10 +64,6 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     }
   }, [bootstrapQuery.isError, clearTokens, router]);
 
-  if (isHydrated && !accessToken && !hasRefreshToken && !shouldAttemptRefresh && !refreshMutation.isSuccess) {
-    router.replace("/login");
-  }
-
   const showLoader =
     !isHydrated ||
     refreshMutation.isPending ||
