@@ -21,3 +21,17 @@ export interface BootstrapResponse {
   profile: UserProfile;
   clinic: ClinicProfile;
 }
+
+export interface PatientRecord {
+  id: number;
+  name: string;
+  phone: string;
+  createdAt: string;
+}
+
+export interface AppointmentRecord {
+  id: number;
+  patient: string;
+  service: string;
+  date: string;
+}

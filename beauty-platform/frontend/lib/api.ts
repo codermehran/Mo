@@ -1,4 +1,9 @@
-import type { AuthTokens, BootstrapResponse } from "@/lib/types";
+import type {
+  AppointmentRecord,
+  AuthTokens,
+  BootstrapResponse,
+  PatientRecord,
+} from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -55,4 +60,46 @@ export async function fetchBootstrap(accessToken?: string): Promise<BootstrapRes
     },
   });
   return handleResponse<BootstrapResponse>(response);
+}
+
+export async function fetchPatients(): Promise<PatientRecord[]> {
+  const response = await fetch(`${API_BASE_URL}/patients`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  return handleResponse<PatientRecord[]>(response);
+}
+
+export async function createPatient(payload: { name: string; phone: string }): Promise<PatientRecord> {
+  const response = await fetch(`${API_BASE_URL}/patients`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<PatientRecord>(response);
+}
+
+export async function fetchAppointments(): Promise<AppointmentRecord[]> {
+  const response = await fetch(`${API_BASE_URL}/appointments`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  return handleResponse<AppointmentRecord[]>(response);
+}
+
+export async function createAppointment(payload: {
+  patient: string;
+  service: string;
+  date: string;
+}): Promise<AppointmentRecord> {
+  const response = await fetch(`${API_BASE_URL}/appointments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<AppointmentRecord>(response);
 }
