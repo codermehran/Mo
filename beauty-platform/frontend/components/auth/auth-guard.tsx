@@ -10,7 +10,7 @@ import { BootstrapProvider } from "@/components/auth/bootstrap-context";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { accessToken, refreshToken, hasRefreshToken, setTokens, clearTokens } = useAuth();
+  const { accessToken, refreshToken, hasRefreshToken, isHydrated, setTokens, clearTokens } = useAuth();
 
   const shouldAttemptRefresh = useMemo(
     () => !accessToken && hasRefreshToken,
@@ -27,13 +27,28 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!accessToken && !hasRefreshToken && !refreshMutation.isPending) {
+    if (isHydrated && !accessToken && !hasRefreshToken && !refreshMutation.isSuccess) {
+      router.replace("/login");
+    }
+  }, [accessToken, hasRefreshToken, isHydrated, refreshMutation.isSuccess, router]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (!accessToken && !hasRefreshToken) {
       router.replace("/login");
     }
     if (shouldAttemptRefresh && !refreshMutation.isPending && !refreshMutation.isSuccess) {
       refreshMutation.mutate(refreshToken ?? undefined);
     }
-  }, [accessToken, hasRefreshToken, refreshMutation, refreshToken, router, shouldAttemptRefresh]);
+  }, [
+    accessToken,
+    hasRefreshToken,
+    refreshMutation,
+    refreshToken,
+    router,
+    shouldAttemptRefresh,
+    isHydrated,
+  ]);
 
   const bootstrapQuery = useQuery({
     queryKey: ["bootstrap", accessToken],
@@ -50,6 +65,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [bootstrapQuery.isError, clearTokens, router]);
 
   const showLoader =
+    !isHydrated ||
     refreshMutation.isPending ||
     (shouldAttemptRefresh && !refreshMutation.isSuccess) ||
     (!accessToken && !refreshMutation.isSuccess) ||

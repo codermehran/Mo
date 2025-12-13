@@ -1,25 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
-const seedStaff = [
-  { id: 1, name: "مینا تهرانی", role: "پزشک", active: true },
-  { id: 2, name: "آیدا مرادی", role: "مسئول پذیرش", active: true },
-  { id: 3, name: "سارا محسنی", role: "پرستار", active: false },
-];
+import { fetchStaffMembers, toggleStaffMember } from "@/lib/api";
+import type { StaffMember } from "@/lib/types";
 
 export default function StaffPage() {
-  const [staff, setStaff] = useState(seedStaff);
+  const queryClient = useQueryClient();
 
-  const handleToggle = (id: number) => {
-    setStaff((list) =>
-      list.map((member) =>
-        member.id === id ? { ...member, active: !member.active } : member,
-      ),
-    );
-  };
+  const staffQuery = useQuery({
+    queryKey: ["staff"],
+    queryFn: fetchStaffMembers,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (payload: { id: number; active: boolean }) =>
+      toggleStaffMember(payload.id, { active: payload.active }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<StaffMember[]>(["staff"], (current = []) =>
+        current.map((member) => (member.id === updated.id ? updated : member)),
+      );
+    },
+  });
+
+  const staff = useMemo(() => staffQuery.data ?? [], [staffQuery.data]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-4 py-10">
@@ -27,8 +33,7 @@ export default function StaffPage() {
         <p className="text-xs uppercase tracking-widest text-slate-500">owner</p>
         <h1 className="text-3xl font-bold text-slate-900">مدیریت کارکنان</h1>
         <p className="mt-1 text-sm text-slate-600">
-          مالک می‌تواند دسترسی کارکنان را فعال یا غیرفعال کند و وضعیت جاری هر نقش را
-          ببیند.
+          مالک می‌تواند دسترسی کارکنان را فعال یا غیرفعال کند و وضعیت جاری هر نقش را ببیند.
         </p>
       </header>
 
@@ -53,13 +58,19 @@ export default function StaffPage() {
               </span>
               <Button
                 variant={member.active ? "outline" : "default"}
-                onClick={() => handleToggle(member.id)}
+                onClick={() => toggleMutation.mutate({ id: member.id, active: !member.active })}
               >
                 {member.active ? "غیرفعال‌سازی" : "فعال‌سازی"}
               </Button>
             </div>
           </div>
         ))}
+        {staff.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500">کارکنی یافت نشد.</p>
+        ) : null}
+        {toggleMutation.isPending ? (
+          <p className="py-2 text-sm text-blue-700">در حال به‌روزرسانی وضعیت...</p>
+        ) : null}
       </Card>
     </main>
   );

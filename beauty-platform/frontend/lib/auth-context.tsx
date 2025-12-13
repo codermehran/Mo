@@ -9,6 +9,7 @@ interface AuthContextValue {
   accessToken: string | null;
   refreshToken: string | null;
   hasRefreshToken: boolean;
+  isHydrated: boolean;
   setTokens: (tokens?: AuthTokens) => void;
   clearTokens: () => void;
 }
@@ -24,29 +25,43 @@ const refreshCookieOptions: CookieOptions = {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const initialRefresh = getCookie(REFRESH_COOKIE_NAME);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState<string | null>(null);
-  const [hasRefreshToken, setHasRefreshToken] = useState(false);
+  const [refreshToken, setRefreshToken] = useState<string | null>(initialRefresh);
+  const [hasRefreshToken, setHasRefreshToken] = useState(Boolean(initialRefresh));
+  const [isHydrated, setIsHydrated] = useState(true);
 
   useEffect(() => {
-    const existingRefresh = getCookie(REFRESH_COOKIE_NAME);
-    if (existingRefresh) {
-      setRefreshToken(existingRefresh);
-      setHasRefreshToken(true);
-    }
+    let cancelled = false;
 
-    const checkHttpOnlyCookie = async () => {
+    const hydrate = async () => {
+      const existingRefresh = getCookie(REFRESH_COOKIE_NAME);
+      if (existingRefresh) {
+        setRefreshToken(existingRefresh);
+        setHasRefreshToken(true);
+      }
+      setIsHydrated(true);
+
       try {
         const response = await fetch("/api/auth/refresh-token");
-        if (!response.ok) return;
-        const payload = (await response.json()) as { hasRefreshToken?: boolean };
-        setHasRefreshToken(Boolean(payload.hasRefreshToken));
+        if (response.ok) {
+          const payload = (await response.json()) as { hasRefreshToken?: boolean };
+          if (!cancelled) {
+            setHasRefreshToken(Boolean(payload.hasRefreshToken));
+          }
+        }
       } catch {
-        setHasRefreshToken(false);
+        if (!cancelled) {
+          setHasRefreshToken(false);
+        }
       }
     };
 
-    void checkHttpOnlyCookie();
+    void hydrate();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persistRefreshToken = async (token?: string) => {
@@ -80,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken,
       refreshToken,
       hasRefreshToken,
+      isHydrated,
       setTokens: (tokens?: AuthTokens) => {
         if (!tokens) {
           setAccessToken(null);
