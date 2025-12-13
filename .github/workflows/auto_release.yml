@@ -1,0 +1,47 @@
+name: Auto Release Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - '.github/**' # Optional: prevent workflow loop if we were modifying files, but we are only tagging.
+      # If we modify files (like updating version in package.json), we would need to be careful.
+      # But our script only tags.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to access all tags for versioning
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'beauty-platform/frontend/package-lock.json'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Make Scripts Executable
+        run: chmod +x scripts/*.sh
+
+      - name: Execute Release Pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/manage_release.sh
