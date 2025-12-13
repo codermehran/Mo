@@ -1,5 +1,8 @@
+import json
 import uuid
 from datetime import timedelta
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.utils import timezone
@@ -20,11 +23,59 @@ class CreateCheckoutSerializer(serializers.Serializer):
         currency = validated_data.get("currency", "USD")
 
         reference_id = uuid.uuid4().hex
-        invoice_id = uuid.uuid4().hex
-        checkout_base = getattr(
-            settings, "BITPAY_CHECKOUT_URL", "https://checkout.bitpay.com/invoice"
+        api_token = getattr(settings, "BITPAY_API_TOKEN", None)
+        api_url = getattr(settings, "BITPAY_API_URL", "https://bitpay.com/invoices")
+        if not api_token:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["BitPay API token is not configured."]}
+            )
+
+        payload = {
+            "price": str(plan.monthly_price),
+            "currency": currency,
+            "orderId": reference_id,
+            "posData": {
+                "clinic_id": clinic.id,
+                "plan_id": plan.id,
+                "reference_id": reference_id,
+            },
+        }
+
+        request_obj = Request(
+            api_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_token}",
+            },
         )
-        checkout_url = f"{checkout_base}/{reference_id}"
+
+        try:
+            with urlopen(request_obj, timeout=10) as response:
+                raw_response = response.read().decode("utf-8")
+                response_data = json.loads(raw_response or "{}")
+        except HTTPError as exc:  # pragma: no cover - external call
+            raise serializers.ValidationError(
+                {"non_field_errors": [f"BitPay API error: {exc.code}"]}
+            ) from exc
+        except URLError as exc:  # pragma: no cover - external call
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Failed to reach BitPay API."]}
+            ) from exc
+
+        invoice_data = response_data.get("data", response_data)
+        if not isinstance(invoice_data, dict):
+            invoice_data = {}
+
+        invoice_id = invoice_data.get("id")
+        if not invoice_id:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["BitPay response missing invoice id."]}
+            )
+        checkout_url = invoice_data.get(
+            "url",
+            f"{getattr(settings, 'BITPAY_CHECKOUT_URL', 'https://checkout.bitpay.com/invoice?id=')}{invoice_id}",
+        )
 
         payment = BillingPayment.objects.create(
             clinic=clinic,
@@ -34,6 +85,7 @@ class CreateCheckoutSerializer(serializers.Serializer):
             reference_id=reference_id,
             invoice_id=invoice_id,
             checkout_url=checkout_url,
+            metadata=invoice_data,
         )
 
         return payment

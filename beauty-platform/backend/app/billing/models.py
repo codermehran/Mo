@@ -136,9 +136,32 @@ class BillingPayment(models.Model):
         ]
         ordering = ["-created_at"]
 
-    def mark_success(self, transaction_id: str | None = None) -> None:
+    def mark_success(
+        self,
+        transaction_id: str | None = None,
+        invoice_id: str | None = None,
+        metadata: dict | None = None,
+    ) -> None:
         self.status = self.Status.SUCCESS
         if transaction_id:
             self.transaction_id = transaction_id
+        if invoice_id:
+            self.invoice_id = invoice_id
+        if metadata is not None:
+            existing = self.metadata or {}
+            if isinstance(existing, dict) and isinstance(metadata, dict):
+                existing.update(metadata)
+                self.metadata = existing
+            else:
+                self.metadata = metadata
         self.paid_at = timezone.now()
-        self.save(update_fields=["status", "transaction_id", "paid_at", "updated_at"])
+        self.save(
+            update_fields=[
+                "status",
+                "transaction_id",
+                "invoice_id",
+                "metadata",
+                "paid_at",
+                "updated_at",
+            ]
+        )

@@ -14,6 +14,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -174,4 +176,14 @@ FREE_MAX_APPOINTMENTS = _int_env("FREE_MAX_APPOINTMENTS", 1000)
 
 BITPAY_WEBHOOK_TOKEN = os.getenv("BITPAY_WEBHOOK_TOKEN")
 BITPAY_WEBHOOK_SECRET = os.getenv("BITPAY_WEBHOOK_SECRET")
-BITPAY_CHECKOUT_URL = os.getenv("BITPAY_CHECKOUT_URL", "https://checkout.bitpay.com/invoice")
+BITPAY_CHECKOUT_URL = os.getenv(
+    "BITPAY_CHECKOUT_URL", "https://checkout.bitpay.com/invoice?id="
+)
+BITPAY_API_TOKEN = os.getenv("BITPAY_API_TOKEN")
+BITPAY_API_URL = os.getenv("BITPAY_API_URL", "https://bitpay.com/invoices")
+
+if not DEBUG:
+    if not BITPAY_WEBHOOK_SECRET or not BITPAY_WEBHOOK_TOKEN:
+        raise ImproperlyConfigured(
+            "BitPay webhook secret/token must be set when DEBUG is False."
+        )
