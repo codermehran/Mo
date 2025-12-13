@@ -72,10 +72,8 @@ jobs:
         run: echo "tag=v${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: ایجاد ریلیز
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          release_name: انتشار خودکار ${{ steps.version.outputs.tag }}
+          name: انتشار خودکار ${{ steps.version.outputs.tag }}
           generate_release_notes: true
