@@ -95,6 +95,8 @@ export function OtpFlow({ mode, title, subtitle }: OtpFlowProps) {
                 onClick={() => {
                   setStep("request");
                   setCode("");
+                  requestMutation.reset();
+                  verifyMutation.reset();
                 }}
               >
                 ویرایش شماره موبایل
