@@ -1,9 +1,7 @@
-import json
 import uuid
 from datetime import timedelta
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+import requests
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
@@ -23,59 +21,52 @@ class CreateCheckoutSerializer(serializers.Serializer):
         currency = validated_data.get("currency", "USD")
 
         reference_id = uuid.uuid4().hex
-        api_token = getattr(settings, "BITPAY_API_TOKEN", None)
-        api_url = getattr(settings, "BITPAY_API_URL", "https://bitpay.com/invoices")
-        if not api_token:
+        api_key = getattr(settings, "BITPAY_API_KEY", None)
+        redirect_url = getattr(settings, "BITPAY_REDIRECT_URL", None)
+        request_url = getattr(
+            settings, "BITPAY_REQUEST_URL", "https://bitpay.ir/payment/gateway-send"
+        )
+        checkout_prefix = getattr(
+            settings, "BITPAY_CHECKOUT_URL", "https://bitpay.ir/payment/gateway-"
+        )
+        if not api_key or not redirect_url:
             raise serializers.ValidationError(
-                {"non_field_errors": ["BitPay API token is not configured."]}
+                {"non_field_errors": ["BitPay.ir API key or redirect URL is not set."]}
             )
 
         payload = {
-            "price": str(plan.monthly_price),
-            "currency": currency,
-            "orderId": reference_id,
-            "posData": {
-                "clinic_id": clinic.id,
-                "plan_id": plan.id,
-                "reference_id": reference_id,
-            },
+            "api": api_key,
+            "redirect": redirect_url,
+            "amount": int(plan.monthly_price),
+            "factorId": reference_id,
+            "name": clinic.name or clinic.code,
+            "email": clinic.email or getattr(clinic.owner, "email", ""),
+            "description": f"Subscription for {plan.name}",
         }
 
-        request_obj = Request(
-            api_url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_token}",
-            },
-        )
-
         try:
-            with urlopen(request_obj, timeout=10) as response:
-                raw_response = response.read().decode("utf-8")
-                response_data = json.loads(raw_response or "{}")
-        except HTTPError as exc:  # pragma: no cover - external call
+            response = requests.post(request_url, data=payload, timeout=10)
+        except requests.RequestException as exc:  # pragma: no cover - external call
             raise serializers.ValidationError(
-                {"non_field_errors": [f"BitPay API error: {exc.code}"]}
-            ) from exc
-        except URLError as exc:  # pragma: no cover - external call
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Failed to reach BitPay API."]}
+                {"non_field_errors": ["Failed to reach BitPay.ir gateway."]}
             ) from exc
 
-        invoice_data = response_data.get("data", response_data)
-        if not isinstance(invoice_data, dict):
-            invoice_data = {}
-
-        invoice_id = invoice_data.get("id")
-        if not invoice_id:
+        if response.status_code != 200:
             raise serializers.ValidationError(
-                {"non_field_errors": ["BitPay response missing invoice id."]}
+                {"non_field_errors": ["BitPay.ir gateway returned an error."]}
             )
-        checkout_url = invoice_data.get(
-            "url",
-            f"{getattr(settings, 'BITPAY_CHECKOUT_URL', 'https://checkout.bitpay.com/invoice?id=')}{invoice_id}",
-        )
+
+        invoice_id = response.text.strip()
+        try:
+            invoice_numeric = int(invoice_id)
+        except ValueError:
+            invoice_numeric = -1
+        if invoice_numeric <= 0:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Invalid BitPay.ir invoice identifier returned."]}
+            )
+
+        checkout_url = f"{checkout_prefix}{invoice_id}"
 
         payment = BillingPayment.objects.create(
             clinic=clinic,
@@ -85,7 +76,7 @@ class CreateCheckoutSerializer(serializers.Serializer):
             reference_id=reference_id,
             invoice_id=invoice_id,
             checkout_url=checkout_url,
-            metadata=invoice_data,
+            metadata={"request_payload": payload},
         )
 
         return payment

@@ -1,8 +1,7 @@
-import hashlib
-import hmac
 import logging
 from typing import ClassVar
 
+import requests
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -17,15 +16,6 @@ from .serializers import (
     CreateCheckoutSerializer,
     activate_subscription,
 )
-
-
-def _verify_signature(secret: str | None, raw_body: bytes, signature: str | None) -> bool:
-    if not secret:
-        return False
-    if not signature:
-        return False
-    computed = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(signature, computed)
 
 
 logger = logging.getLogger(__name__)
@@ -51,27 +41,45 @@ class CreateCheckoutView(APIView):
 class BitPayWebhookView(APIView):
     permission_classes: ClassVar[tuple] = (permissions.AllowAny,)
 
+    def _extract_params(self, request):
+        data = request.data if hasattr(request, "data") else {}
+        query = request.query_params if hasattr(request, "query_params") else {}
+        trans_id = data.get("trans_id") or query.get("trans_id")
+        id_get = data.get("id_get") or query.get("id_get")
+        reference_id = data.get("factorId") or query.get("factorId")
+        return trans_id, id_get, reference_id
+
     def post(self, request):
-        token = request.headers.get("X-Webhook-Token")
-        expected_token = getattr(settings, "BITPAY_WEBHOOK_TOKEN", None)
-        if expected_token and token != expected_token:
-            return Response({"detail": "invalid_token"}, status=status.HTTP_401_UNAUTHORIZED)
-        if not expected_token and not getattr(settings, "BITPAY_WEBHOOK_SECRET", None):
-            logger.error("BitPay webhook rejected: missing secret/token configuration")
-            return Response({"detail": "webhook_disabled"}, status=status.HTTP_401_UNAUTHORIZED)
+        trans_id, id_get, reference_id = self._extract_params(request)
+        if not trans_id or not id_get:
+            return Response({"detail": "missing_parameters"}, status=status.HTTP_400_BAD_REQUEST)
 
-        signature = request.headers.get("X-Signature")
-        secret = getattr(settings, "BITPAY_WEBHOOK_SECRET", None)
-        if not _verify_signature(secret, request.body, signature):
-            return Response({"detail": "invalid_signature"}, status=status.HTTP_401_UNAUTHORIZED)
+        api_key = getattr(settings, "BITPAY_API_KEY", None)
+        verify_url = getattr(
+            settings, "BITPAY_VERIFY_URL", "https://bitpay.ir/payment/gateway-result-second"
+        )
+        if not api_key:
+            logger.error("BitPay.ir verification failed: API key not configured")
+            return Response({"detail": "configuration_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        payload = request.data
-        reference_id = payload.get("reference_id") or payload.get("id")
-        invoice_id = payload.get("invoice_id") or reference_id
-        payment_status = str(payload.get("status", "")).upper()
-        transaction_id = payload.get("transaction_id") or ""
-        metadata = payload.dict() if hasattr(payload, "dict") else dict(payload)
+        verify_payload = {
+            "api": api_key,
+            "trans_id": trans_id,
+            "id_get": id_get,
+            "json": 1,
+        }
 
+        try:
+            response = requests.post(verify_url, data=verify_payload, timeout=10)
+            result = response.json()
+        except requests.RequestException:  # pragma: no cover - external call
+            logger.exception("BitPay.ir verification request failed")
+            return Response({"detail": "verification_failed"}, status=status.HTTP_502_BAD_GATEWAY)
+        except ValueError:
+            logger.error("BitPay.ir verification returned non-JSON response")
+            return Response({"detail": "invalid_response"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        reference_id = result.get("factorId") or reference_id
         if not reference_id:
             return Response({"detail": "missing_reference"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -85,12 +93,13 @@ class BitPayWebhookView(APIView):
         if payment.status == BillingPayment.Status.SUCCESS:
             return Response({"detail": "already_processed"}, status=status.HTTP_200_OK)
 
-        success_states = {"SUCCESS", "CONFIRMED", "PAID", "COMPLETED", "COMPLETE"}
-        if payment_status not in success_states:
+        status_value = result.get("status")
+        success_states = {1, "1", True, "SUCCESS", "success"}
+        if status_value not in success_states:
             payment.status = BillingPayment.Status.FAILED
-            payment.metadata = metadata
+            payment.metadata = result
             payment.save(update_fields=["status", "metadata", "updated_at"])
-            return Response({"detail": "ignored_status"}, status=status.HTTP_202_ACCEPTED)
+            return Response({"detail": "payment_failed"}, status=status.HTTP_202_ACCEPTED)
 
         with transaction.atomic():
             locked_payment = (
@@ -99,13 +108,16 @@ class BitPayWebhookView(APIView):
                 .get(pk=payment.pk)
             )
             locked_payment.mark_success(
-                transaction_id=transaction_id,
-                invoice_id=invoice_id,
-                metadata=metadata,
+                transaction_id=trans_id,
+                invoice_id=id_get,
+                metadata=result,
             )
             activate_subscription(locked_payment.clinic, locked_payment.plan)
 
         return Response({"detail": "ok"}, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        return self.post(request)
 
 
 class BillingStatusView(APIView):
