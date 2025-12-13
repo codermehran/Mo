@@ -35,6 +35,12 @@ class CreateCheckoutView(APIView):
         serializer = CreateCheckoutSerializer(data=request.data, context={"clinic": clinic})
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        logger.info(
+            "Checkout created for clinic_id=%s plan=%s by user=%s",
+            clinic.id,
+            serializer.validated_data.get("plan"),
+            getattr(request.user, "id", None),
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -52,6 +58,12 @@ class BitPayWebhookView(APIView):
     def post(self, request):
         trans_id, id_get, reference_id = self._extract_params(request)
         if not trans_id or not id_get:
+            logger.warning(
+                "BitPay webhook missing parameters trans_id=%s id_get=%s ref=%s",
+                trans_id,
+                id_get,
+                reference_id,
+            )
             return Response({"detail": "missing_parameters"}, status=status.HTTP_400_BAD_REQUEST)
 
         api_key = getattr(settings, "BITPAY_API_KEY", None)
@@ -88,9 +100,19 @@ class BitPayWebhookView(APIView):
                 reference_id=reference_id
             )
         except BillingPayment.DoesNotExist:
+            logger.error(
+                "BitPay webhook payment not found reference_id=%s trans_id=%s",
+                reference_id,
+                trans_id,
+            )
             return Response({"detail": "payment_not_found"}, status=status.HTTP_404_NOT_FOUND)
 
         if payment.status == BillingPayment.Status.SUCCESS:
+            logger.info(
+                "BitPay webhook already processed payment_id=%s reference_id=%s",
+                payment.id,
+                reference_id,
+            )
             return Response({"detail": "already_processed"}, status=status.HTTP_200_OK)
 
         status_value = result.get("status")
@@ -99,6 +121,12 @@ class BitPayWebhookView(APIView):
             payment.status = BillingPayment.Status.FAILED
             payment.metadata = result
             payment.save(update_fields=["status", "metadata", "updated_at"])
+            logger.warning(
+                "BitPay payment failed payment_id=%s reference_id=%s status=%s",
+                payment.id,
+                reference_id,
+                status_value,
+            )
             return Response({"detail": "payment_failed"}, status=status.HTTP_202_ACCEPTED)
 
         with transaction.atomic():
@@ -113,6 +141,12 @@ class BitPayWebhookView(APIView):
                 metadata=result,
             )
             activate_subscription(locked_payment.clinic, locked_payment.plan)
+            logger.info(
+                "BitPay payment succeeded payment_id=%s clinic_id=%s plan_id=%s",
+                locked_payment.id,
+                locked_payment.clinic_id,
+                locked_payment.plan_id,
+            )
 
         return Response({"detail": "ok"}, status=status.HTTP_200_OK)
 
