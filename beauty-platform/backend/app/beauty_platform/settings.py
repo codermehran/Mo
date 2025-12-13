@@ -28,7 +28,21 @@ SECRET_KEY = "django-insecure-+1^lhki%tzk*^zd0bc2hw36(@^_nwp94hk0o%a*7-(*7@7rgf2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+def _list_env(name: str, default: list[str] | None = None) -> list[str]:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default or []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+ALLOWED_HOSTS = _list_env("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
 
 
 # Application definition
@@ -40,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "accounts",
@@ -52,6 +67,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -146,6 +162,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+    "EXCEPTION_HANDLER": "beauty_platform.exceptions.api_exception_handler",
 }
 
 SIMPLE_JWT = {
@@ -154,6 +171,20 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,
 }
+
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN")
+CORS_ALLOWED_ORIGINS = _list_env(
+    "CORS_ALLOWED_ORIGINS",
+    [FRONTEND_ORIGIN] if FRONTEND_ORIGIN else ["http://localhost:3000"],
+)
+CORS_ALLOW_CREDENTIALS = True
+
+JWT_ACCESS_COOKIE_NAME = os.getenv("JWT_ACCESS_COOKIE_NAME", "access_token")
+JWT_REFRESH_COOKIE_NAME = os.getenv("JWT_REFRESH_COOKIE_NAME", "refresh_token")
+JWT_COOKIE_DOMAIN = os.getenv("JWT_COOKIE_DOMAIN")
+JWT_COOKIE_SECURE = _bool_env("JWT_COOKIE_SECURE", False)
+JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
+JWT_COOKIE_PATH = os.getenv("JWT_COOKIE_PATH", "/")
 
 KAVENEGAR_API_KEY = os.getenv("KAVENEGAR_API_KEY")
 KAVENEGAR_LOGIN_TEMPLATE = os.getenv("KAVENEGAR_LOGIN_TEMPLATE")
@@ -182,3 +213,32 @@ BITPAY_REQUEST_URL = os.getenv(
 BITPAY_VERIFY_URL = os.getenv(
     "BITPAY_VERIFY_URL", "https://bitpay.ir/payment/gateway-result-second"
 )
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        }
+    },
+    "loggers": {
+        "": {"handlers": ["console"], "level": "INFO"},
+        "django.security.DisallowedHost": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "beauty_platform.permissions": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
