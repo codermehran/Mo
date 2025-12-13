@@ -167,7 +167,7 @@ class VerifyOTPView(APIView):
         client_ip = _get_client_ip(request)
 
         if client_ip:
-            cache_key = f"otp-verify:{client_ip}:{phone_number}:{purpose}"
+            cache_key = f"otp-verify:{client_ip}:{purpose}"
             attempts_from_ip = cache.get(cache_key, 0) + 1
             cache.set(
                 cache_key,
@@ -271,8 +271,6 @@ class VerifyOTPView(APIView):
         access_token = refresh.access_token
 
         response_data = {
-            "access": str(access_token),
-            "refresh": str(refresh),
             "attempts": otp.attempt_count,
             "user_id": user.id,
             "role": user.role,
@@ -282,11 +280,18 @@ class VerifyOTPView(APIView):
             response_data["clinic_id"] = user.clinic_id
         response = Response(response_data)
 
+        cookie_secure = (
+            True
+            if str(settings.JWT_COOKIE_SAMESITE).lower() == "none"
+            else settings.JWT_COOKIE_SECURE
+        )
+        # Browsers require Secure when SameSite=None; enforce to keep cookies usable.
+
         response.set_cookie(
             settings.JWT_ACCESS_COOKIE_NAME,
             str(access_token),
             httponly=True,
-            secure=settings.JWT_COOKIE_SECURE,
+            secure=cookie_secure,
             samesite=settings.JWT_COOKIE_SAMESITE,
             domain=settings.JWT_COOKIE_DOMAIN,
             path=settings.JWT_COOKIE_PATH,
@@ -296,7 +301,7 @@ class VerifyOTPView(APIView):
             settings.JWT_REFRESH_COOKIE_NAME,
             str(refresh),
             httponly=True,
-            secure=settings.JWT_COOKIE_SECURE,
+            secure=cookie_secure,
             samesite=settings.JWT_COOKIE_SAMESITE,
             domain=settings.JWT_COOKIE_DOMAIN,
             path=settings.JWT_COOKIE_PATH,
@@ -310,7 +315,9 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.data.get("refresh")
+        refresh_token = request.data.get("refresh") or request.COOKIES.get(
+            settings.JWT_REFRESH_COOKIE_NAME
+        )
         if not refresh_token:
             return Response(
                 {"detail": "Refresh token is required."},
@@ -343,16 +350,34 @@ class RefreshTokenView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = TokenRefreshSerializer(data=request.data)
+        refresh_token = request.data.get("refresh") or request.COOKIES.get(
+            settings.JWT_REFRESH_COOKIE_NAME
+        )
+        if not refresh_token:
+            return Response(
+                {"detail": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        response = Response(data)
+        body = {k: v for k, v in data.items() if k not in {"access", "refresh"}}
+        if not body:
+            body = {"detail": "token_refreshed"}
+        response = Response(body)
+
+        cookie_secure = (
+            True
+            if str(settings.JWT_COOKIE_SAMESITE).lower() == "none"
+            else settings.JWT_COOKIE_SECURE
+        )
+        # Browsers require Secure when SameSite=None; enforce to keep cookies usable.
         if "access" in data:
             response.set_cookie(
                 settings.JWT_ACCESS_COOKIE_NAME,
                 data["access"],
                 httponly=True,
-                secure=settings.JWT_COOKIE_SECURE,
+                secure=cookie_secure,
                 samesite=settings.JWT_COOKIE_SAMESITE,
                 domain=settings.JWT_COOKIE_DOMAIN,
                 path=settings.JWT_COOKIE_PATH,
@@ -363,7 +388,7 @@ class RefreshTokenView(APIView):
                 settings.JWT_REFRESH_COOKIE_NAME,
                 data["refresh"],
                 httponly=True,
-                secure=settings.JWT_COOKIE_SECURE,
+                secure=cookie_secure,
                 samesite=settings.JWT_COOKIE_SAMESITE,
                 domain=settings.JWT_COOKIE_DOMAIN,
                 path=settings.JWT_COOKIE_PATH,

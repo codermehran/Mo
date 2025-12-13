@@ -38,7 +38,7 @@ class CreateCheckoutView(APIView):
         logger.info(
             "Checkout created for clinic_id=%s plan=%s by user=%s",
             clinic.id,
-            serializer.validated_data.get("plan"),
+            getattr(serializer.validated_data.get("plan"), "id", serializer.validated_data.get("plan")),
             getattr(request.user, "id", None),
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -83,6 +83,7 @@ class BitPayWebhookView(APIView):
 
         try:
             response = requests.post(verify_url, data=verify_payload, timeout=10)
+            response.raise_for_status()
             result = response.json()
         except requests.RequestException:  # pragma: no cover - external call
             logger.exception("BitPay.ir verification request failed")
@@ -135,6 +136,13 @@ class BitPayWebhookView(APIView):
                 .select_related("clinic", "plan")
                 .get(pk=payment.pk)
             )
+            if locked_payment.status == BillingPayment.Status.SUCCESS:
+                logger.info(
+                    "BitPay webhook already processed payment_id=%s reference_id=%s",
+                    locked_payment.id,
+                    reference_id,
+                )
+                return Response({"detail": "already_processed"}, status=status.HTTP_200_OK)
             locked_payment.mark_success(
                 transaction_id=trans_id,
                 invoice_id=id_get,
