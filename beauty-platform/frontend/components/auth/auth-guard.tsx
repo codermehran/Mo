@@ -36,7 +36,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [accessToken, refreshMutation, refreshToken, router, shouldAttemptRefresh]);
 
   const bootstrapQuery = useQuery({
-    queryKey: ["bootstrap"],
+    queryKey: ["bootstrap", accessToken],
     queryFn: () => fetchBootstrap(accessToken || undefined),
     enabled: Boolean(accessToken),
     retry: false,
