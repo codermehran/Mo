@@ -1,16 +1,14 @@
 name: Auto Release Pipeline
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
     branches:
       - main
       - master
-    paths-ignore:
-      - 'docs/**'
-      - 'README.md'
-      - '.github/**' # Optional: prevent workflow loop if we were modifying files, but we are only tagging.
-      # If we modify files (like updating version in package.json), we would need to be careful.
-      # But our script only tags.
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -19,6 +17,8 @@ permissions:
 jobs:
   build-and-release:
     name: Build and Release
+    if: >
+      ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
