@@ -1,8 +1,12 @@
 import type {
   AppointmentRecord,
   AuthTokens,
+  BillingStatus,
   BootstrapResponse,
+  ClinicProfile,
+  ClinicSettingsInput,
   PatientRecord,
+  StaffMember,
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -94,6 +98,7 @@ export async function createAppointment(payload: {
   patient: string;
   service: string;
   date: string;
+  time: string;
 }): Promise<AppointmentRecord> {
   const response = await fetch(`${API_BASE_URL}/appointments`, {
     method: "POST",
@@ -102,4 +107,76 @@ export async function createAppointment(payload: {
     body: JSON.stringify(payload),
   });
   return handleResponse<AppointmentRecord>(response);
+}
+
+export async function updateAppointmentStatus(
+  id: number,
+  status: AppointmentRecord["status"],
+): Promise<AppointmentRecord> {
+  const response = await fetch(`${API_BASE_URL}/appointments/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status }),
+  });
+  return handleResponse<AppointmentRecord>(response);
+}
+
+export async function fetchClinicProfile(): Promise<ClinicProfile> {
+  const response = await fetch(`${API_BASE_URL}/clinic`, {
+    method: "GET",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<ClinicProfile>(response);
+}
+
+export async function updateClinicProfile(payload: ClinicSettingsInput): Promise<ClinicProfile> {
+  const response = await fetch(`${API_BASE_URL}/clinic`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<ClinicProfile>(response);
+}
+
+export async function fetchStaffMembers(): Promise<StaffMember[]> {
+  const response = await fetch(`${API_BASE_URL}/staff`, {
+    method: "GET",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<StaffMember[]>(response);
+}
+
+export async function toggleStaffMember(
+  id: number,
+  payload: { active: boolean },
+): Promise<StaffMember> {
+  const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<StaffMember>(response);
+}
+
+export async function requestBillingCheckout(): Promise<{ checkout_url: string }> {
+  const response = await fetch(`${API_BASE_URL}/billing/checkout`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<{ checkout_url: string }>(response);
+}
+
+export async function fetchBillingStatus(): Promise<BillingStatus> {
+  const response = await fetch(`${API_BASE_URL}/billing/status`, {
+    method: "GET",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<BillingStatus>(response);
 }

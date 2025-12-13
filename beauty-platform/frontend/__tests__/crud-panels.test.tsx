@@ -1,5 +1,5 @@
 import userEvent from "@testing-library/user-event";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { AppointmentScheduler } from "@/components/appointments/appointment-scheduler";
@@ -57,6 +57,7 @@ describe("AppointmentScheduler", () => {
     await user.type(screen.getByPlaceholderText("لیزر، تزریق و..."), "پاکسازی پوست");
     const dateInput = screen.getByLabelText("تاریخ");
     await user.type(dateInput, "1403-11-01");
+    await user.type(screen.getByLabelText("ساعت"), "11:00");
     await user.click(screen.getByRole("button", { name: "ذخیره نوبت" }));
 
     await screen.findByText("نگار میرزایی");
@@ -76,11 +77,42 @@ describe("AppointmentScheduler", () => {
     renderWithProviders(<AppointmentScheduler />);
 
     await screen.findByText("مونا زمانی");
-    await user.type(screen.getByPlaceholderText("مثلاً نرگس"), "مریم" );
-    await user.type(screen.getByPlaceholderText("لیزر، تزریق و..."), "لیزر" );
+    await user.type(screen.getByPlaceholderText("مثلاً نرگس"), "مریم");
+    await user.type(screen.getByPlaceholderText("لیزر، تزریق و..."), "لیزر");
     await user.type(screen.getByLabelText("تاریخ"), "1403-11-02");
+    await user.type(screen.getByLabelText("ساعت"), "08:30");
     await user.click(screen.getByRole("button", { name: "ذخیره نوبت" }));
 
     await screen.findByText("سقف پلن فعلی اجازه ثبت نوبت جدید را نمی‌دهد.");
+  });
+
+  it("updates appointment status and shows toast", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = renderWithProviders(<AppointmentScheduler />);
+
+    await screen.findByText("مونا زمانی");
+    const checkInButtons = await screen.findAllByRole("button", { name: "ثبت حضور" });
+    await user.click(checkInButtons[0]);
+
+    await screen.findByText("وضعیت نوبت به‌روزرسانی شد.");
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<AppointmentRecord[]>(["appointments"]);
+      expect(cached?.find((item) => item.patient === "مونا زمانی")?.status).toBe("CHECKED_IN");
+    });
+  });
+
+  it("surfaces time conflict toast from API mock", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppointmentScheduler />);
+
+    await screen.findByText("مونا زمانی");
+    await user.clear(screen.getByLabelText("ساعت"));
+    await user.type(screen.getByPlaceholderText("مثلاً نرگس"), "هما");
+    await user.type(screen.getByPlaceholderText("لیزر، تزریق و..."), "ویزیت");
+    await user.type(screen.getByLabelText("تاریخ"), "1403-10-10");
+    await user.type(screen.getByLabelText("ساعت"), "10:00");
+    await user.click(screen.getByRole("button", { name: "ذخیره نوبت" }));
+
+    await screen.findByText("زمان انتخابی با نوبت دیگری تداخل دارد.");
   });
 });

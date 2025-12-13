@@ -1,39 +1,50 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
-const formatPersianDate = (offsetDays: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-};
-
-const plans = [
-  {
-    name: "پلن حرفه‌ای",
-    expiry: formatPersianDate(60),
-    features: ["۵ کاربر هم‌زمان", "۳ شعبه فعال", "پشتیبانی ۲۴/۷"],
-    status: "active",
-  },
-  {
-    name: "پلن پایه",
-    expiry: formatPersianDate(-90),
-    features: ["۲ کاربر", "۱ شعبه", "پشتیبانی ایمیلی"],
-    status: "expired",
-  },
-];
+import { Input } from "@/components/ui/input";
+import { fetchClinicProfile, updateClinicProfile } from "@/lib/api";
+import type { ClinicProfile, ClinicSettingsInput } from "@/lib/types";
 
 export default function ClinicSettingsPage() {
-  const activePlan = useMemo(
-    () => plans.find((plan) => plan.status === "active") ?? plans[0],
-    [],
-  );
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<ClinicSettingsInput>({ name: "", address: "", timezone: "" });
+  const [status, setStatus] = useState<string | null>(null);
+
+  const clinicQuery = useQuery({
+    queryKey: ["clinic"],
+    queryFn: fetchClinicProfile,
+  });
+
+  useEffect(() => {
+    if (clinicQuery.data) {
+      setForm((prev) =>
+        prev.name
+          ? prev
+          : {
+              name: clinicQuery.data.name,
+              address: clinicQuery.data.address,
+              timezone: clinicQuery.data.timezone,
+            },
+      );
+    }
+  }, [clinicQuery.data]);
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: ClinicSettingsInput) => updateClinicProfile(payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ClinicProfile>(["clinic"], updated);
+      setStatus("تغییرات با موفقیت ذخیره شد.");
+    },
+    onError: (error) => setStatus((error as Error).message),
+  });
+
+  const handleChange = (field: keyof ClinicSettingsInput, value: string) => {
+    setStatus(null);
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-10">
@@ -41,9 +52,7 @@ export default function ClinicSettingsPage() {
         <div>
           <p className="text-xs uppercase tracking-widest text-slate-500">clinic</p>
           <h1 className="text-3xl font-bold text-slate-900">تنظیمات کلینیک</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            مدیریت پلن فعلی، تاریخ انقضا و گزینه‌های ارتقا برای کلینیک.
-          </p>
+          <p className="mt-1 text-sm text-slate-600">اطلاعات تماس و منطقه زمانی را به‌روز کنید.</p>
         </div>
         <Button variant="default">ارتقا</Button>
       </header>
@@ -51,63 +60,70 @@ export default function ClinicSettingsPage() {
       <section className="grid gap-4 md:grid-cols-2">
         <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">پلن فعال</h2>
-            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
-              فعال
-            </span>
+            <h2 className="text-lg font-semibold text-slate-900">اطلاعات کلینیک</h2>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">ویرایش</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{activePlan.name}</p>
-          <p className="text-sm text-slate-700">
-            تاریخ انقضا: <span className="font-semibold">{activePlan.expiry}</span>
-          </p>
-          <ul className="space-y-2 text-sm text-slate-700">
-            {activePlan.features.map((item) => (
-              <li key={item} className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
-                {item}
-              </li>
-            ))}
-          </ul>
-          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-            پس از انقضا، دسترسی کاربران محدود می‌شود. ارتقا یا تمدید پلن باعث حفظ
-            داده‌های بیماران و نوبت‌ها خواهد شد.
-          </div>
-          <div className="flex gap-3">
-            <Button>تمدید پلن</Button>
-            <Button variant="outline">نمایش پلن‌ها</Button>
-          </div>
+
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateMutation.mutate(form);
+            }}
+          >
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              <span>نام کلینیک</span>
+              <Input
+                placeholder="مثلاً کلینیک آفتاب"
+                value={form.name}
+                onChange={(event) => handleChange("name", event.target.value)}
+                required
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              <span>آدرس</span>
+              <Input
+                placeholder="تهران، خیابان ..."
+                value={form.address || ""}
+                onChange={(event) => handleChange("address", event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              <span>منطقه زمانی</span>
+              <Input
+                placeholder="Asia/Tehran"
+                value={form.timezone || ""}
+                onChange={(event) => handleChange("timezone", event.target.value)}
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "در حال ذخیره..." : "ذخیره تغییرات"}
+              </Button>
+            </div>
+          </form>
+
+          {status ? <p className="text-sm text-emerald-700" role="alert">{status}</p> : null}
         </Card>
 
         <Card className="space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-slate-900">پلن‌های دیگر</h2>
-          <div className="space-y-3">
-            {plans
-              .filter((plan) => plan.status !== "active")
-              .map((plan) => (
-                <div
-                  key={plan.name}
-                  className="rounded-lg border border-slate-200 p-3 text-sm text-slate-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-slate-900">{plan.name}</p>
-                    {plan.status === "expired" ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700">
-                        منقضی شده
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-slate-500">تاریخ انقضا: {plan.expiry}</p>
-                  <ul className="mt-2 list-disc space-y-1 pr-5">
-                    {plan.features.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
-                  </ul>
-                  <Button className="mt-3" variant="outline" size="sm">
-                    ارتقا به این پلن
-                  </Button>
-                </div>
-              ))}
-          </div>
+          <h2 className="text-lg font-semibold text-slate-900">پیش‌نمایش عمومی</h2>
+          {clinicQuery.isLoading ? (
+            <p className="text-sm text-slate-600">در حال بارگذاری...</p>
+          ) : null}
+          {clinicQuery.data ? (
+            <div className="space-y-2 text-sm text-slate-700">
+              <p>
+                <span className="font-semibold">نام:</span> {clinicQuery.data.name}
+              </p>
+              <p>
+                <span className="font-semibold">آدرس:</span> {clinicQuery.data.address}
+              </p>
+              <p>
+                <span className="font-semibold">منطقه زمانی:</span> {clinicQuery.data.timezone}
+              </p>
+            </div>
+          ) : null}
         </Card>
       </section>
     </main>
