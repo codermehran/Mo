@@ -108,14 +108,6 @@ class BitPayWebhookView(APIView):
             )
             return Response({"detail": "payment_not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if payment.status == BillingPayment.Status.SUCCESS:
-            logger.info(
-                "BitPay webhook already processed payment_id=%s reference_id=%s",
-                payment.id,
-                reference_id,
-            )
-            return Response({"detail": "already_processed"}, status=status.HTTP_200_OK)
-
         status_value = result.get("status")
         success_states = {1, "1", True, "SUCCESS", "success"}
         if status_value not in success_states:
