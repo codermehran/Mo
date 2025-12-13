@@ -4,16 +4,26 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
+const formatPersianDate = (offsetDays: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return new Intl.DateTimeFormat("fa-IR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+};
+
 const plans = [
   {
     name: "پلن حرفه‌ای",
-    expiry: "۱۴۰۳/۱۰/۱۵",
+    expiry: formatPersianDate(60),
     features: ["۵ کاربر هم‌زمان", "۳ شعبه فعال", "پشتیبانی ۲۴/۷"],
     status: "active",
   },
   {
     name: "پلن پایه",
-    expiry: "منقضی شده",
+    expiry: formatPersianDate(-90),
     features: ["۲ کاربر", "۱ شعبه", "پشتیبانی ایمیلی"],
     status: "expired",
   },

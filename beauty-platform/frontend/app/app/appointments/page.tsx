@@ -5,26 +5,32 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+const formatDate = (offsetDays: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+};
+
 const initialAppointments = [
   {
     id: 1,
     patient: "فاطمه ابراهیمی",
     service: "لیزر پوست",
-    date: "2024-06-20",
+    date: formatDate(3),
     status: "رزرو شده",
   },
   {
     id: 2,
     patient: "مونا زمانی",
     service: "تزریق بوتاکس",
-    date: "2024-06-22",
+    date: formatDate(-2),
     status: "انجام شد",
   },
   {
     id: 3,
     patient: "سحر مرادی",
     service: "میکرونیدلینگ",
-    date: "2024-06-25",
+    date: formatDate(-20),
     status: "لغو شد",
   },
 ];

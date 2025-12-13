@@ -3,9 +3,19 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
+const formatPersianDate = (offsetDays: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return new Intl.DateTimeFormat("fa-IR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+};
+
 const billingStatus = {
   plan: "پلن حرفه‌ای",
-  renewalDate: "۱۴۰۳/۱۰/۱۵",
+  renewalDate: formatPersianDate(30),
   paymentStatus: "موفق",
   amount: "۱۲،۰۰۰،۰۰۰ تومان",
 };

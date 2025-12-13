@@ -49,7 +49,7 @@ export default function StaffPage() {
               <span
                 className={`rounded-full px-3 py-1 text-xs font-medium ${member.active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}
               >
-                {member.active ? "Active" : "Inactive"}
+                {member.active ? "فعال" : "غیرفعال"}
               </span>
               <Button
                 variant={member.active ? "outline" : "default"}

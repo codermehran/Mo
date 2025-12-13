@@ -37,7 +37,13 @@ export default function PatientDetailPage() {
   const params = useParams<{ id: string }>();
   const patientId = params.id;
 
-  const patient = useMemo(() => patients[Number(patientId) as 101 | 102 | 103], [patientId]);
+  const patient = useMemo(() => {
+    const id = Number(patientId);
+    if (id === 101 || id === 102 || id === 103) {
+      return patients[id];
+    }
+    return undefined;
+  }, [patientId]);
 
   if (!patient) {
     return (
